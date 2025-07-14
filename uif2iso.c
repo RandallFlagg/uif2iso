@@ -185,7 +185,7 @@ int main(int argc, char *argv[]) {
             *blss_data  = NULL,
             *outext;
 
-    setbuf(stdout, NULL);
+    setvbuf(stdout, NULL, _IONBF, 0);
 
     fputs("\n"
         "UIF2ISO "VER"\n"
@@ -1219,5 +1219,3 @@ void myexit(void) {
 #endif
     exit(1);
 }
-
-
