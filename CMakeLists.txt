@@ -20,6 +20,14 @@ set(OPENSSL_CRYPTO_LIBRARY "${OPENSSL_ROOT}/lib/libcrypto.lib")
 # Target executable
 add_executable(uif2iso uif2iso.c)
 
+add_custom_command(TARGET uif2iso POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/ZLib/bin/zlib.dll"
+        "${CMAKE_SOURCE_DIR}/OpenSSL/bin/libssl-3-x64.dll"
+        "${CMAKE_SOURCE_DIR}/OpenSSL/bin/libcrypto-3-x64.dll"
+        $<TARGET_FILE_DIR:uif2iso>
+)
+
 # Compiler flags
 target_compile_options(uif2iso PRIVATE -O2)  # Removed '-s' since Clang doesn’t use it here
 
