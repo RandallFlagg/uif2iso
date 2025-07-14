@@ -3,20 +3,34 @@ set(CMAKE_POLICY_VERSION_MINIMUM 4.0)
 
 project(uif2iso VERSION 0.1 LANGUAGES C)
 
-# Local ZLib paths
+# Local dependency paths
 set(ZLIB_ROOT "${CMAKE_SOURCE_DIR}/ZLib")
 set(ZLIB_INCLUDE_DIR "${ZLIB_ROOT}/include")
-set(ZLIB_LIBRARY "${ZLIB_ROOT}/lib/zlib.lib")  # Adjust if it's a different filename
+set(ZLIB_LIBRARY "${ZLIB_ROOT}/lib/zlib.lib")
 
-# Add executable
+set(OPENSSL_ROOT "${CMAKE_SOURCE_DIR}/OpenSSL")
+set(OPENSSL_INCLUDE_DIR "${OPENSSL_ROOT}/include")
+set(OPENSSL_SSL_LIBRARY "${OPENSSL_ROOT}/lib/libssl.lib")
+set(OPENSSL_CRYPTO_LIBRARY "${OPENSSL_ROOT}/lib/libcrypto.lib")
+
+# Target executable
 add_executable(uif2iso uif2iso.c)
 
 # Compiler flags
-target_compile_options(uif2iso PRIVATE -O2 -s)
+target_compile_options(uif2iso PRIVATE -O2)  # Removed '-s' since Clang doesn’t use it here
 
-# Link libraries with local ZLib
-target_include_directories(uif2iso PRIVATE ${ZLIB_INCLUDE_DIR})
-target_link_libraries(uif2iso PRIVATE ${ZLIB_LIBRARY} ssl crypto)
+# Include directories
+target_include_directories(uif2iso PRIVATE
+    ${ZLIB_INCLUDE_DIR}
+    ${OPENSSL_INCLUDE_DIR}
+)
+
+# Link libraries
+target_link_libraries(uif2iso PRIVATE
+    ${ZLIB_LIBRARY}
+    ${OPENSSL_SSL_LIBRARY}
+    ${OPENSSL_CRYPTO_LIBRARY}
+)
 
 # Debugger working directory
 set_target_properties(uif2iso PROPERTIES
