@@ -18,17 +18,14 @@
     http://www.gnu.org/licenses/gpl.txt
 */
 
-#define _LARGE_FILES        // if it's not supported the tool will work
-#define __USE_LARGEFILE64   // without support for large files
-#define __USE_FILE_OFFSET64
 #define _LARGEFILE_SOURCE
-#define _LARGEFILE64_SOURCE
 #define _FILE_OFFSET_BITS   64
 
+#include <io.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
 #include <zlib.h>
 #include <openssl/des.h>
 
@@ -199,7 +196,7 @@ int main(int argc, char *argv[]) {
 
 #ifdef WIN32
     mywnd = GetForegroundWindow();
-    if(GetWindowLong(mywnd, GWL_WNDPROC)) {
+    if(GetWindowLong(mywnd, GWLP_WNDPROC)) {
         p = argv[1];
         argv = malloc(sizeof(char *) * 3);
         if(argc < 2) {
@@ -235,9 +232,15 @@ int main(int argc, char *argv[]) {
         myexit();
     }
 
+#ifdef _WIN32
+    _fseeki64(fdi, 0, SEEK_END);
+    file_size = _ftelli64(fdi);
+    if(_fseeki64(fdi, file_size - sizeof(bbis), SEEK_SET)) {
+#else
     fseek(fdi, 0, SEEK_END);
     file_size = ftell(fdi);
     if(fseek(fdi, file_size - sizeof(bbis), SEEK_SET)) {
+#endif
         if(((file_size - sizeof(bbis)) > 0x7fffffff) && ((file_size - sizeof(bbis)) < file_size)) printf("  an error here means that your exe has no full LARGE_FILES 64 bit support!\n");
         std_err();
     }
@@ -274,7 +277,11 @@ redo_bbis:
     //    "  unknown      %08x %08x %08x\n",
     //    bbis.bbis_size, bbis.unknown2, bbis.unknown3, bbis.unknown4);
 
+#ifdef _WIN32
+    if(_fseeki64(fdi, bbis.blhr, SEEK_SET)) std_err();
+#else
     if(fseek(fdi, bbis.blhr, SEEK_SET)) std_err();
+#endif
     myfr(fdi, &blhr, sizeof(blhr));
     l2n_blhr(&blhr);
     if(blhr.sign != BLHR_SIGN) {
@@ -296,7 +303,11 @@ redo_bbis:
             if(blhr.size != sizeof(bbis)) {
                 printf("- Alert: the size of the bbis struct and the one specified by bsdr don't match\n");
             }
+        #ifdef _WIN32
+            _fseeki64(fdi, -8, SEEK_CUR);
+        #else
             fseek(fdi, -8, SEEK_CUR);
+        #endif
             memcpy(tmphash, bbis.hash, sizeof(bbis.hash));
             myfr(fdi, &bbis, sizeof(bbis));
             uif_crypt(ctx, (void *)&bbis, sizeof(bbis));
@@ -323,7 +334,12 @@ redo_bbis:
             blms_data = blhr_unzip(fdi, &z, ctx, blms.size - 8, blms.num);
 
             myfr(fdi, &blss, sizeof(blss));
+        // additional data to skip
+        #ifdef _WIN32
+            if(_fseeki64(fdi, 4, SEEK_CUR)) std_err();
+        #else
             if(fseek(fdi, 4, SEEK_CUR)) std_err();  // additional data to skip
+        #endif
             l2n_blhr(&blss);
             if(blss.sign != BLSS_SIGN) {
                 printf("- Alert: wrong blss signature (%08x)\n", blss.sign);
@@ -404,7 +420,11 @@ redo_bbis:
         myalloc(&in, blhr_data[i].zsize, &insz);
 
         if(blhr_data[i].zsize) {
+        #ifdef _WIN32
+            if(_fseeki64(fdi, blhr_data[i].offset, SEEK_SET)) std_err();
+        #else
             if(fseek(fdi, blhr_data[i].offset, SEEK_SET)) std_err();
+        #endif
             myfr(fdi, in, blhr_data[i].zsize);
             uif_crypt(ctx, in, blhr_data[i].zsize);
         }
@@ -436,7 +456,11 @@ redo_bbis:
             }
         }
 
+    #ifdef _WIN32
+        if(_fseeki64(fdo, (u64)blhr_data[i].sector * (u64)bbis.sectorsz, SEEK_SET)) std_err();
+    #else    
         if(fseek(fdo, (u64)blhr_data[i].sector * (u64)bbis.sectorsz, SEEK_SET)) std_err();
+    #endif
         myfw(fdo, out, blhr_data[i].size);
         tot += blhr_data[i].size;
     }
@@ -567,7 +591,11 @@ void nrg2cue(FILE *fd, u64 nrgoff, u8 *fileo) {
             *p,
             *l;
 
+#ifdef _WIN32
+    if(_fseeki64(fd, nrgoff, SEEK_SET)) {
+#else    
     if(fseek(fd, nrgoff, SEEK_SET)) {
+#endif
         printf("- Alert: wrong NRG header offset\n");
         return;
     }
@@ -672,7 +700,11 @@ void nrg2cue(FILE *fd, u64 nrgoff, u8 *fileo) {
             free(buff);
             continue;
         }
+    #ifdef _WIN32
+        if(_fseeki64(fd, chunk.size, SEEK_CUR)) break;
+    #else    
         if(fseek(fd, chunk.size, SEEK_CUR)) break;
+    #endif
     }
     fclose(fdcue);
 }
@@ -687,7 +719,11 @@ void magiciso_is_invalid(FILE *fd, u64 nrgoff, u8 *fileo) {
     u8      tracks, // can't be more than 8bit
             *buff;
 
+#ifdef _WIN32
+    if(_fseeki64(fd, nrgoff, SEEK_SET)) {
+#else    
     if(fseek(fd, nrgoff, SEEK_SET)) {
+#endif
         printf("- Alert: wrong NRG header offset\n");
         return;
     }
@@ -710,7 +746,11 @@ void magiciso_is_invalid(FILE *fd, u64 nrgoff, u8 *fileo) {
                 if(index2 > nrgoff) {
                     putxx(buff + chunk.size - numsz, nrgoff, numsz << 3, 1);
                     printf("- correcting last DAO index2\n");
+                #ifdef _WIN32
+                    _fseeki64(fd, -numsz, SEEK_CUR);
+                #else    
                     fseek(fd, -numsz, SEEK_CUR);
+                #endif
                     myfw(fd, buff + chunk.size - numsz, numsz);
                     fflush(fd); // you can't imagine how much required is this fflush...
                 }
@@ -721,14 +761,26 @@ void magiciso_is_invalid(FILE *fd, u64 nrgoff, u8 *fileo) {
         }
         if(!memcmp(chunk.id, "SINF", 4)) {  // usually located after DAO
             if(chunk.size >= 4) {
+            #ifdef _WIN32
+                if(_fseeki64(fd, 3, SEEK_CUR)) break;
+            #else    
                 if(fseek(fd, 3, SEEK_CUR)) break;
+            #endif
                 printf("- correcting SINF to %u tracks\n", tracks);
                 myfw(fd, &tracks, 1);
                 fflush(fd); // you can't imagine how much required is this fflush...
+            #ifdef _WIN32
+                _fseeki64(fd, -4, SEEK_CUR);    // restore
+            #else    
                 fseek(fd, -4, SEEK_CUR);    // restore
+            #endif
             }
         }
+    #ifdef _WIN32
+        if(_fseeki64(fd, chunk.size, SEEK_CUR)) break;
+    #else    
         if(fseek(fd, chunk.size, SEEK_CUR)) break;
+    #endif
     }
 }
 
@@ -747,10 +799,19 @@ void nrg_truncate(u8 *fileo, int secsz) {
     if(!fd) return;
 
     fflush(fd);
+#ifdef _WIN32
+    _fseeki64(fd, 0, SEEK_END);
+    realsize = _ftelli64(fd);
+#else
     fseek(fd, 0, SEEK_END);
     realsize = ftell(fd);
+#endif
 
+#ifdef _WIN32
+    if(!_fseeki64(fd, -secsz, SEEK_END)) {
+#else
     if(!fseek(fd, -secsz, SEEK_END)) {
+#endif
         buff = malloc(secsz);
         if(!buff) std_err();
         myfr(fd, buff, secsz);
@@ -773,18 +834,36 @@ void nrg_truncate(u8 *fileo, int secsz) {
             magiciso_is_invalid(fd, nrgoff, fileo);
             nrg2cue(fd, nrgoff, fileo);
 
+        #ifdef _WIN32
+            _fseeki64(fd, truncseek, SEEK_END);
+        #else
             fseek(fd, truncseek, SEEK_END);
+        #endif
             fflush(fd);
+        #ifdef _WIN32
+            truncsize = _ftelli64(fd);
+        #else
             truncsize = ftell(fd);
+        #endif
             if(realsize != truncsize) {
                 printf("- found NRG end of file at offset 0x%08x%08x\n", PRINTF64(truncsize));
-                ftruncate(fileno(fd), truncsize);   // trick to spawn errors or warnings if there is no large file support
+                // trick to spawn errors or warnings if there is no large file support
+            #ifdef _WIN32
+                _chsize_s(_fileno(fd), truncsize);
+            #else
+                ftruncate(fileno(fd), truncsize);
+            #endif
                 fflush(fd);
                 fclose(fd);
 
                 fd = fopen(fileo, "rb");    // verify if the truncation was correct
                 if(!fd) return;
+
+            #ifdef _WIN32
+                _fseeki64(fd, 0, SEEK_END);
+            #else
                 fseek(fd, 0, SEEK_END);
+            #endif
                 realsize = ftell(fd);
                 if(realsize < truncsize) {
                     printf("\n"
@@ -1212,7 +1291,7 @@ void myexit(void) {
 #ifdef WIN32
     u8      ans[8];
 
-    if(GetWindowLong(mywnd, GWL_WNDPROC)) {
+    if(GetWindowLong(mywnd, GWLP_WNDPROC)) {
         printf("\nPress RETURN to quit");
         fgetz(ans, sizeof(ans), stdin);
     }
